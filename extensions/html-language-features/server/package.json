@@ -13,7 +13,7 @@
     "vscode-css-languageservice": "^6.2.6",
     "vscode-html-languageservice": "^5.0.6",
     "vscode-languageserver": "^8.2.0-next.1",
-    "vscode-languageserver-textdocument": "^1.0.8",
+    "vscode-languageserver-textdocument": "^1.0.9",
     "vscode-uri": "^3.0.7"
   },
   "devDependencies": {
