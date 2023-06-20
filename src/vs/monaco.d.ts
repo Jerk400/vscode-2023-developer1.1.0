@@ -14,10 +14,45 @@ declare namespace monaco {
 	export type Thenable<T> = PromiseLike<T>;
 
 	export interface Environment {
+		/**
+		 * Define a global `monaco` symbol.
+		 * This is true by default in AMD and false by default in ESM.
+		 */
 		globalAPI?: boolean;
+		/**
+		 * The base url where the editor sources are found (which contains the vs folder)
+		 */
 		baseUrl?: string;
+		/**
+		 * A web worker factory.
+		 * NOTE: If `getWorker` is defined, `getWorkerUrl` is not invoked.
+		 */
 		getWorker?(workerId: string, label: string): Promise<Worker> | Worker;
+		/**
+		 * Return the location for web worker scripts.
+		 * NOTE: If `getWorker` is defined, `getWorkerUrl` is not invoked.
+		 */
 		getWorkerUrl?(workerId: string, label: string): string;
+		/**
+		 * Create a trusted types policy (same API as window.trustedTypes.createPolicy)
+		 */
+		createTrustedTypesPolicy(
+			policyName: string,
+			policyOptions?: ITrustedTypePolicyOptions,
+		): undefined | ITrustedTypePolicy;
+	}
+
+	export interface ITrustedTypePolicyOptions {
+		createHTML?: (input: string, ...arguments: any[]) => string;
+		createScript?: (input: string, ...arguments: any[]) => string;
+		createScriptURL?: (input: string, ...arguments: any[]) => string;
+	}
+
+	export interface ITrustedTypePolicy {
+		readonly name: string;
+		createHTML?(input: string): any;
+		createScript?(input: string): any;
+		createScriptURL?(input: string): any;
 	}
 
 	export interface IDisposable {
@@ -2355,6 +2390,10 @@ declare namespace monaco.editor {
 		 * A diff computation should throw if it takes longer than this value.
 		 */
 		maxComputationTimeMs: number;
+		/**
+		 * If set, the diff computation should compute moves in addition to insertions and deletions.
+		 */
+		computeMoves: boolean;
 	}
 
 	/**
@@ -2372,7 +2411,12 @@ declare namespace monaco.editor {
 		/**
 		 * Maps all modified line ranges in the original to the corresponding line ranges in the modified text model.
 		 */
-		readonly changes: LineRangeMapping[];
+		readonly changes: readonly LineRangeMapping[];
+		/**
+		 * Sorted by original line ranges.
+		 * The original line ranges and the modified line ranges must be disjoint (but can be touching).
+		 */
+		readonly moves: readonly MovedText[];
 	}
 
 	/**
@@ -2380,6 +2424,7 @@ declare namespace monaco.editor {
 	 */
 	export class LineRange {
 		static fromRange(range: Range): LineRange;
+		static subtract(a: LineRange, b: LineRange | undefined): LineRange[];
 		/**
 		 * @param lineRanges An array of sorted line ranges.
 		 */
@@ -2430,13 +2475,14 @@ declare namespace monaco.editor {
 		equals(b: LineRange): boolean;
 		toInclusiveRange(): Range | null;
 		toExclusiveRange(): Range;
+		mapToLineArray<T>(f: (lineNumber: number) => T): T[];
 	}
 
 	/**
 	 * Maps a line range in the original text model to a line range in the modified text model.
 	 */
 	export class LineRangeMapping {
-		static inverse(mapping: LineRangeMapping[], originalLineCount: number, modifiedLineCount: number): LineRangeMapping[];
+		static inverse(mapping: readonly LineRangeMapping[], originalLineCount: number, modifiedLineCount: number): LineRangeMapping[];
 		/**
 		 * The line range in the original text model.
 		 */
@@ -2455,6 +2501,7 @@ declare namespace monaco.editor {
 		constructor(originalRange: LineRange, modifiedRange: LineRange, innerChanges: RangeMapping[] | undefined);
 		toString(): string;
 		get changedLineCount(): any;
+		flip(): LineRangeMapping;
 	}
 
 	/**
@@ -2471,6 +2518,27 @@ declare namespace monaco.editor {
 		readonly modifiedRange: Range;
 		constructor(originalRange: Range, modifiedRange: Range);
 		toString(): string;
+		flip(): RangeMapping;
+	}
+
+	export class MovedText {
+		readonly lineRangeMapping: SimpleLineRangeMapping;
+		/**
+		 * The diff from the original text to the moved text.
+		 * Must be contained in the original/modified line range.
+		 * Can be empty if the text didn't change (only moved).
+		 */
+		readonly changes: readonly LineRangeMapping[];
+		constructor(lineRangeMapping: SimpleLineRangeMapping, changes: readonly LineRangeMapping[]);
+		flip(): MovedText;
+	}
+
+	export class SimpleLineRangeMapping {
+		readonly originalRange: LineRange;
+		readonly modifiedRange: LineRange;
+		constructor(originalRange: LineRange, modifiedRange: LineRange);
+		toString(): string;
+		flip(): SimpleLineRangeMapping;
 	}
 	export interface IDimension {
 		width: number;
@@ -2555,6 +2623,11 @@ declare namespace monaco.editor {
 		modified: ITextModel;
 	}
 
+	export interface IDiffEditorViewModel {
+		readonly model: IDiffEditorModel;
+		waitForDiff(): Promise<void>;
+	}
+
 	/**
 	 * An event describing that an editor has had its model reset (i.e. `editor.setModel()`).
 	 */
@@ -2589,7 +2662,7 @@ declare namespace monaco.editor {
 		run(args?: unknown): Promise<void>;
 	}
 
-	export type IEditorModel = ITextModel | IDiffEditorModel;
+	export type IEditorModel = ITextModel | IDiffEditorModel | IDiffEditorViewModel;
 
 	/**
 	 * A (serializable) state of the cursors.
@@ -3435,6 +3508,10 @@ declare namespace monaco.editor {
 		 */
 		colorDecorators?: boolean;
 		/**
+		 * Controls what is the condition to spawn a color picker from a color dectorator
+		 */
+		colorDecoratorsActivatedOn?: 'clickAndHover' | 'click' | 'hover';
+		/**
 		 * Controls the max number of color decorators that can be rendered in an editor at once.
 		 */
 		colorDecoratorsLimit?: number;
@@ -3872,6 +3949,10 @@ declare namespace monaco.editor {
 			 * Defaults to false.
 			 */
 			collapseUnchangedRegions?: boolean;
+			/**
+			 * Defaults to false.
+			 */
+			showMoves?: boolean;
 		};
 	}
 
@@ -4544,6 +4625,10 @@ declare namespace monaco.editor {
 		 */
 		filterGraceful?: boolean;
 		/**
+		 * Prevent quick suggestions when a snippet is active. Defaults to true.
+		 */
+		snippetsPreventQuickSuggestions?: boolean;
+		/**
 		 * Favors words that appear close to the cursor.
 		 */
 		localityBonus?: boolean;
@@ -4695,6 +4780,7 @@ declare namespace monaco.editor {
 
 	export interface ISmartSelectOptions {
 		selectLeadingAndTrailingWhitespace?: boolean;
+		selectSubwords?: boolean;
 	}
 
 	/**
@@ -4901,7 +4987,8 @@ declare namespace monaco.editor {
 		tabFocusMode = 139,
 		layoutInfo = 140,
 		wrappingInfo = 141,
-		defaultColorDecorators = 142
+		defaultColorDecorators = 142,
+		colorDecoratorsActivatedOn = 143
 	}
 
 	export const EditorOptions: {
@@ -4925,6 +5012,7 @@ declare namespace monaco.editor {
 		codeLensFontFamily: IEditorOption<EditorOption.codeLensFontFamily, string>;
 		codeLensFontSize: IEditorOption<EditorOption.codeLensFontSize, number>;
 		colorDecorators: IEditorOption<EditorOption.colorDecorators, boolean>;
+		colorDecoratorActivatedOn: IEditorOption<EditorOption.colorDecoratorsActivatedOn, 'clickAndHover' | 'click' | 'hover'>;
 		colorDecoratorsLimit: IEditorOption<EditorOption.colorDecoratorsLimit, number>;
 		columnSelection: IEditorOption<EditorOption.columnSelection, boolean>;
 		comments: IEditorOption<EditorOption.comments, Readonly<Required<IEditorCommentsOptions>>>;
@@ -5300,6 +5388,43 @@ declare namespace monaco.editor {
 		 * If null is returned, the overlay widget is responsible to place itself.
 		 */
 		getPosition(): IOverlayWidgetPosition | null;
+	}
+
+	/**
+	 * A glyph margin widget renders in the editor glyph margin.
+	 */
+	export interface IGlyphMarginWidget {
+		/**
+		 * Get a unique identifier of the glyph widget.
+		 */
+		getId(): string;
+		/**
+		 * Get the dom node of the glyph widget.
+		 */
+		getDomNode(): HTMLElement;
+		/**
+		 * Get the placement of the glyph widget.
+		 */
+		getPosition(): IGlyphMarginWidgetPosition;
+	}
+
+	/**
+	 * A position for rendering glyph margin widgets.
+	 */
+	export interface IGlyphMarginWidgetPosition {
+		/**
+		 * The glyph margin lane where the widget should be shown.
+		 */
+		lane: GlyphMarginLane;
+		/**
+		 * The priority order of the widget, used for determining which widget
+		 * to render when there are multiple.
+		 */
+		zIndex: number;
+		/**
+		 * The editor range that this widget applies to.
+		 */
+		range: IRange;
 	}
 
 	/**
@@ -5875,6 +6000,19 @@ declare namespace monaco.editor {
 		 */
 		removeOverlayWidget(widget: IOverlayWidget): void;
 		/**
+		 * Add a glyph margin widget. Widgets must have unique ids, otherwise they will be overwritten.
+		 */
+		addGlyphMarginWidget(widget: IGlyphMarginWidget): void;
+		/**
+		 * Layout/Reposition a glyph margin widget. This is a ping to the editor to call widget.getPosition()
+		 * and update appropriately.
+		 */
+		layoutGlyphMarginWidget(widget: IGlyphMarginWidget): void;
+		/**
+		 * Remove a glyph margin widget.
+		 */
+		removeGlyphMarginWidget(widget: IGlyphMarginWidget): void;
+		/**
 		 * Change the view zones. View zones are lost when a new model is attached to the editor.
 		 */
 		changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void;
@@ -5915,13 +6053,6 @@ declare namespace monaco.editor {
 	}
 
 	/**
-	 * Information about a line in the diff editor
-	 */
-	export interface IDiffLineInformation {
-		readonly equivalentLineNumber: number;
-	}
-
-	/**
 	 * A rich diff editor.
 	 */
 	export interface IDiffEditor extends IEditor {
@@ -5951,6 +6082,7 @@ declare namespace monaco.editor {
 		 * Type the getModel() of IEditor.
 		 */
 		getModel(): IDiffEditorModel | null;
+		createViewModel(model: IDiffEditorModel): IDiffEditorViewModel;
 		/**
 		 * Sets the current model attached to this editor.
 		 * If the previous model was created by the editor via the value key in the options
@@ -5959,7 +6091,7 @@ declare namespace monaco.editor {
 		 * will not be destroyed.
 		 * It is safe to call setModel(null) to simply detach the current model from the editor.
 		 */
-		setModel(model: IDiffEditorModel | null): void;
+		setModel(model: IDiffEditorModel | IDiffEditorViewModel | null): void;
 		/**
 		 * Get the `original` editor.
 		 */
@@ -5972,16 +6104,6 @@ declare namespace monaco.editor {
 		 * Get the computed diff information.
 		 */
 		getLineChanges(): ILineChange[] | null;
-		/**
-		 * Get information based on computed diff about a line number from the original model.
-		 * If the diff computation is not finished or the model is missing, will return null.
-		 */
-		getDiffLineInformationForOriginal(lineNumber: number): IDiffLineInformation | null;
-		/**
-		 * Get information based on computed diff about a line number from the modified model.
-		 * If the diff computation is not finished or the model is missing, will return null.
-		 */
-		getDiffLineInformationForModified(lineNumber: number): IDiffLineInformation | null;
 		/**
 		 * Update the editor's options after the editor has been created.
 		 */
