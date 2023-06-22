@@ -2951,7 +2951,7 @@
     "file-type": "16.5.4",
     "jschardet": "3.0.0",
     "picomatch": "2.3.1",
-    "vscode-uri": "^2.0.0",
+    "vscode-uri": "^2.1.2",
     "which": "3.0.1"
   },
   "devDependencies": {
