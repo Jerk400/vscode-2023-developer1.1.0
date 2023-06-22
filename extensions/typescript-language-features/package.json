@@ -39,7 +39,7 @@
     "vscode-tas-client": "^0.1.63",
     "@vscode/sync-api-client": "^0.7.2",
     "@vscode/sync-api-common": "^0.7.2",
-    "@vscode/sync-api-service": "^0.7.3",
+    "@vscode/sync-api-service": "^0.8.1",
     "vscode-uri": "^3.0.3"
   },
   "devDependencies": {
