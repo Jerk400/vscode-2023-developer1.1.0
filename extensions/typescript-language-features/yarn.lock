@@ -198,13 +198,19 @@
   resolved "https://registry.yarnpkg.com/@vscode/sync-api-common/-/sync-api-common-0.7.2.tgz#705060ee6a0108c24e145e687613becdb4292b33"
   integrity sha512-ne1XEeDIYA3mp4oo1QoF1fqFedd0Vf4ybMmLb9HixbTyXy/qwMNL2p6OjXjOsmx6w2q9eqzGA5W/OPRSJxTTIQ==
 
-"@vscode/sync-api-service@^0.7.3":
-  version "0.7.3"
-  resolved "https://registry.yarnpkg.com/@vscode/sync-api-service/-/sync-api-service-0.7.3.tgz#6cb7bd23c4a7378e4b92ca3638501a9be1937152"
-  integrity sha512-m2AmmfG4uzfjLMgWRHQ3xnBkdwCiUTO68vdw1XuzMsOb39Jwm9xr5bVVxwOFR9lPC0FfO1H6FUxBhZQvg7itPA==
+"@vscode/sync-api-common@0.8.1":
+  version "0.8.1"
+  resolved "https://registry.yarnpkg.com/@vscode/sync-api-common/-/sync-api-common-0.8.1.tgz#3a74b5ee2c89e913bc1d5d8149d5f585fb60b3b7"
+  integrity sha512-XfanQNxkUlCpAsQ2+1SzNEdoY7jtcu48jYBR0n864ZWAWrH7m2QBK32YoNlrDN2V0eh8tdF0WH1NuHOm3Y021A==
+
+"@vscode/sync-api-service@^0.8.1":
+  version "0.8.1"
+  resolved "https://registry.yarnpkg.com/@vscode/sync-api-service/-/sync-api-service-0.8.1.tgz#4cd9d1266cfc7f787488ade27c0e869850e25427"
+  integrity sha512-W9mWVJcnxqqmGIgYKwddMuBsCFff+nxkA67nGlnRGUjpu6Mb+CoYaYLwFriq2c74zpRyMsON7Nfhh5zlFvTAeg==
   dependencies:
-    "@vscode/sync-api-common" "0.7.2"
-    vscode-uri "3.0.3"
+    "@vscode/sync-api-common" "0.8.1"
+    uuid "^9.0.0"
+    vscode-uri "^3.0.6"
 
 agent-base@6:
   version "6.0.2"
@@ -402,6 +408,11 @@ uuid@^8.3.0:
   resolved "https://registry.yarnpkg.com/uuid/-/uuid-8.3.2.tgz#80d5b5ced271bb9af6c445f21a1a04c606cefbe2"
   integrity sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==
 
+uuid@^9.0.0:
+  version "9.0.0"
+  resolved "https://registry.yarnpkg.com/uuid/-/uuid-9.0.0.tgz#592f550650024a38ceb0c562f2f6aa435761efb5"
+  integrity sha512-MXcSTerfPa4uqyzStbRoTgt5XIe3x5+42+q1sDuy3R5MDk66URdLMOZe5aPX/SQd+kuYAh0FdP/pO28IkQyTeg==
+
 vscode-tas-client@^0.1.63:
   version "0.1.63"
   resolved "https://registry.yarnpkg.com/vscode-tas-client/-/vscode-tas-client-0.1.63.tgz#df89e67e9bf7ecb46471a0fb8a4a522d2aafad65"
@@ -413,3 +424,8 @@ vscode-uri@3.0.3, vscode-uri@^3.0.3:
   version "3.0.3"
   resolved "https://registry.yarnpkg.com/vscode-uri/-/vscode-uri-3.0.3.tgz#a95c1ce2e6f41b7549f86279d19f47951e4f4d84"
   integrity sha512-EcswR2S8bpR7fD0YPeS7r2xXExrScVMxg4MedACaWHEtx9ftCF/qHG1xGkolzTPcEmjTavCQgbVzHUIdTMzFGA==
+
+vscode-uri@^3.0.6:
+  version "3.0.7"
+  resolved "https://registry.yarnpkg.com/vscode-uri/-/vscode-uri-3.0.7.tgz#6d19fef387ee6b46c479e5fb00870e15e58c1eb8"
+  integrity sha512-eOpPHogvorZRobNqJGhapa0JdwaxpjVvyBp0QIUMRMSf8ZAlqOdEquKuRmw9Qwu0qXtJIWqFtMkmvJjUZmMjVA==
