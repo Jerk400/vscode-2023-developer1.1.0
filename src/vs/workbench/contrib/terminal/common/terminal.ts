@@ -299,7 +299,6 @@ export interface ITerminalProcessManager extends IDisposable {
 	acknowledgeDataEvent(charCount: number): void;
 	processBinary(data: string): void;
 
-	getLatency(): Promise<number>;
 	refreshProperty<T extends ProcessPropertyType>(type: T): Promise<IProcessPropertyMap[T]>;
 	updateProperty<T extends ProcessPropertyType>(property: T, value: IProcessPropertyMap[T]): Promise<void>;
 	getBackendOS(): Promise<OperatingSystem>;
@@ -331,7 +330,6 @@ export interface ITerminalProcessExtHostProxy extends IDisposable {
 	emitData(data: string): void;
 	emitProcessProperty(property: IProcessProperty<any>): void;
 	emitReady(pid: number, cwd: string, windowsPty: IProcessReadyWindowsPty | undefined): void;
-	emitLatency(latency: number): void;
 	emitExit(exitCode: number | undefined): void;
 
 	onInput: Event<string>;
@@ -341,7 +339,6 @@ export interface ITerminalProcessExtHostProxy extends IDisposable {
 	onShutdown: Event<boolean>;
 	onRequestInitialCwd: Event<void>;
 	onRequestCwd: Event<void>;
-	onRequestLatency: Event<void>;
 }
 
 export interface IStartExtensionTerminalRequest {
@@ -488,7 +485,6 @@ export const enum TerminalCommandId {
 	MoveToTerminalPanel = 'workbench.action.terminal.moveToTerminalPanel',
 	SetDimensions = 'workbench.action.terminal.setDimensions',
 	ClearPreviousSessionHistory = 'workbench.action.terminal.clearPreviousSessionHistory',
-	ShowTerminalAccessibilityHelp = 'workbench.action.terminal.showAccessibilityHelp',
 	SelectPrevSuggestion = 'workbench.action.terminal.selectPrevSuggestion',
 	SelectPrevPageSuggestion = 'workbench.action.terminal.selectPrevPageSuggestion',
 	SelectNextSuggestion = 'workbench.action.terminal.selectNextSuggestion',
@@ -569,8 +565,8 @@ export const DEFAULT_COMMANDS_TO_SKIP_SHELL: string[] = [
 	TerminalCommandId.SelectNextPageSuggestion,
 	TerminalCommandId.AcceptSelectedSuggestion,
 	TerminalCommandId.HideSuggestWidget,
-	TerminalCommandId.ShowTerminalAccessibilityHelp,
 	TerminalCommandId.FocusHover,
+	'editor.action.accessibilityHelp',
 	'editor.action.toggleTabFocusMode',
 	'notifications.hideList',
 	'notifications.hideToasts',

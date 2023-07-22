@@ -17,6 +17,13 @@ enum MediaKind {
 	Audio,
 }
 
+export const externalUriSchemes = [
+	'http',
+	'https',
+	'mailto',
+	'ftp',
+];
+
 export const mediaFileExtensions = new Map<string, MediaKind>([
 	// Images
 	['bmp', MediaKind.Image],
@@ -56,19 +63,53 @@ export const mediaMimes = new Set([
 	'audio/x-wav',
 ]);
 
-export async function getMarkdownLink(document: vscode.TextDocument, ranges: readonly vscode.Range[], urlList: string, token: vscode.CancellationToken): Promise<{ additionalEdits: vscode.WorkspaceEdit; label: string } | undefined> {
+const smartPasteRegexes = [
+	{ regex: /\[.*\]\(.*\)/g, is_markdown_link: true }, // Is a Markdown Link
+	{ regex: /!\[.*\]\(.*\)/g, is_markdown_link: true }, // Is a Markdown Image Link
+	{ regex: /\[([^\]]*)\]\(([^)]*)\)/g, is_markdown_link: false }, // In a Markdown link
+	{ regex: /^```[\s\S]*?```$/gm, is_markdown_link: false }, // In a fenced code block
+	{ regex: /^\$\$[\s\S]*?\$\$$/gm, is_markdown_link: false }, // In a fenced math block
+	{ regex: /`[^`]*`/g, is_markdown_link: false }, // In inline code
+	{ regex: /\$[^$]*\$/g, is_markdown_link: false }, // In inline math
+];
+export interface SmartPaste {
+
+	/**
+	 * `true` if the link is not being pasted within a markdown link, code, or math.
+	 */
+	pasteAsMarkdownLink: boolean;
+
+	/**
+	 * `true` if the link is being pasted over a markdown link.
+	 */
+	updateTitle: boolean;
+
+}
+
+export async function createEditAddingLinksForUriList(document: vscode.TextDocument, ranges: readonly vscode.Range[], urlList: string, token: vscode.CancellationToken, isExternalLink: boolean): Promise<{ additionalEdits: vscode.WorkspaceEdit; label: string } | undefined> {
 	if (ranges.length === 0) {
 		return;
 	}
-
+	const enabled = vscode.workspace.getConfiguration('markdown', document).get<'always' | 'smart' | 'never'>('editor.pasteUrlAsFormattedLink.enabled', 'always');
 	const edits: vscode.SnippetTextEdit[] = [];
 	let placeHolderValue: number = ranges.length;
 	let label: string = '';
+	let smartPaste = { pasteAsMarkdownLink: true, updateTitle: false };
+
 	for (let i = 0; i < ranges.length; i++) {
-		const snippet = await tryGetUriListSnippet(document, urlList, token, document.getText(ranges[i]), placeHolderValue);
+
+		let title = document.getText(ranges[i]);
+		if (enabled === 'smart') {
+			smartPaste = checkSmartPaste(document.getText(), document.offsetAt(ranges[i].start), document.offsetAt(ranges[i].end));
+			title = smartPaste.updateTitle ? '' : document.getText(ranges[i]);
+		}
+
+		const snippet = await tryGetUriListSnippet(document, urlList, token, title, placeHolderValue, smartPaste.pasteAsMarkdownLink, isExternalLink);
 		if (!snippet) {
 			return;
 		}
+
+		smartPaste.pasteAsMarkdownLink = true;
 		placeHolderValue--;
 		edits.push(new vscode.SnippetTextEdit(ranges[i], snippet.snippet));
 		label = snippet.label;
@@ -80,7 +121,25 @@ export async function getMarkdownLink(document: vscode.TextDocument, ranges: rea
 	return { additionalEdits, label };
 }
 
-export async function tryGetUriListSnippet(document: vscode.TextDocument, urlList: String, token: vscode.CancellationToken, title = '', placeHolderValue = 0): Promise<{ snippet: vscode.SnippetString; label: string } | undefined> {
+export function checkSmartPaste(documentText: string, start: number, end: number): SmartPaste {
+	const SmartPaste: SmartPaste = { pasteAsMarkdownLink: true, updateTitle: false };
+	for (const regex of smartPasteRegexes) {
+		const matches = [...documentText.matchAll(regex.regex)];
+		for (const match of matches) {
+			if (match.index !== undefined) {
+				const useDefaultPaste = start > match.index && end < match.index + match[0].length;
+				SmartPaste.pasteAsMarkdownLink = !useDefaultPaste;
+				SmartPaste.updateTitle = regex.is_markdown_link && start === match.index && end === match.index + match[0].length;
+				if (!SmartPaste.pasteAsMarkdownLink || SmartPaste.updateTitle) {
+					return SmartPaste;
+				}
+			}
+		}
+	}
+	return SmartPaste;
+}
+
+export async function tryGetUriListSnippet(document: vscode.TextDocument, urlList: String, token: vscode.CancellationToken, title = '', placeHolderValue = 0, pasteAsMarkdownLink = true, isExternalLink = false): Promise<{ snippet: vscode.SnippetString; label: string } | undefined> {
 	if (token.isCancellationRequested) {
 		return undefined;
 	}
@@ -94,7 +153,7 @@ export async function tryGetUriListSnippet(document: vscode.TextDocument, urlLis
 		}
 	}
 
-	return createUriListSnippet(document, uris, title, placeHolderValue);
+	return createUriListSnippet(document, uris, title, placeHolderValue, pasteAsMarkdownLink, isExternalLink);
 }
 
 interface UriListSnippetOptions {
@@ -112,27 +171,48 @@ interface UriListSnippetOptions {
 	readonly separator?: string;
 }
 
+export function createLinkSnippet(
+	pasteAsMarkdownLink: boolean,
+	mdPath: string,
+	title: string,
+	uri: vscode.Uri,
+	placeholderValue: number,
+	isExternalLink: boolean,
+): vscode.SnippetString {
+	const uriString = uri.toString(true);
+	const snippet = new vscode.SnippetString();
+	if (pasteAsMarkdownLink) {
+		snippet.appendText('[');
+		snippet.appendPlaceholder(escapeBrackets(title) || 'Title', placeholderValue);
+		snippet.appendText(isExternalLink ? `](${uriString})` : `](${escapeMarkdownLinkPath(mdPath)})`);
+	} else {
+		snippet.appendText(isExternalLink ? uriString : escapeMarkdownLinkPath(mdPath));
+	}
+	return snippet;
+}
+
 export function createUriListSnippet(
 	document: vscode.TextDocument,
 	uris: readonly vscode.Uri[],
 	title = '',
 	placeholderValue = 0,
+	pasteAsMarkdownLink = true,
+	isExternalLink = false,
 	options?: UriListSnippetOptions,
 ): { snippet: vscode.SnippetString; label: string } | undefined {
 	if (!uris.length) {
 		return;
 	}
 
-	const dir = getDocumentDir(document);
+	const documentDir = getDocumentDir(document);
 
-	const snippet = new vscode.SnippetString();
-
+	let snippet = new vscode.SnippetString();
 	let insertedLinkCount = 0;
 	let insertedImageCount = 0;
 	let insertedAudioVideoCount = 0;
 
 	uris.forEach((uri, i) => {
-		const mdPath = getMdPath(dir, uri);
+		const mdPath = getMdPath(documentDir, uri);
 
 		const ext = URI.Utils.extname(uri).toLowerCase().replace('.', '');
 		const insertAsMedia = typeof options?.insertAsMedia === 'undefined' ? mediaFileExtensions.has(ext) : !!options.insertAsMedia;
@@ -149,20 +229,22 @@ export function createUriListSnippet(
 			snippet.appendText(`<audio src="${escapeHtmlAttribute(mdPath)}" controls title="`);
 			snippet.appendPlaceholder(escapeBrackets(title) || 'Title', placeholderValue);
 			snippet.appendText('"></audio>');
-		} else {
+		} else if (insertAsMedia) {
 			if (insertAsMedia) {
 				insertedImageCount++;
-				snippet.appendText('![');
-				const placeholderText = options?.placeholderText ? (escapeBrackets(title) || 'Alt text') : 'label';
-				const placeholderIndex = typeof options?.placeholderStartIndex !== 'undefined' ? options?.placeholderStartIndex + i : (placeholderValue === 0 ? undefined : placeholderValue);
-				snippet.appendPlaceholder(placeholderText, placeholderIndex);
-				snippet.appendText(`](${escapeMarkdownLinkPath(mdPath)})`);
-			} else {
-				insertedLinkCount++;
-				snippet.appendText('[');
-				snippet.appendPlaceholder(escapeBrackets(title) || 'Title', placeholderValue);
-				snippet.appendText(`](${escapeMarkdownLinkPath(mdPath)})`);
+				if (pasteAsMarkdownLink) {
+					snippet.appendText('![');
+					const placeholderText = escapeBrackets(title) || options?.placeholderText || 'Alt text';
+					const placeholderIndex = typeof options?.placeholderStartIndex !== 'undefined' ? options?.placeholderStartIndex + i : (placeholderValue === 0 ? undefined : placeholderValue);
+					snippet.appendPlaceholder(placeholderText, placeholderIndex);
+					snippet.appendText(`](${escapeMarkdownLinkPath(mdPath)})`);
+				} else {
+					snippet.appendText(escapeMarkdownLinkPath(mdPath));
+				}
 			}
+		} else {
+			insertedLinkCount++;
+			snippet = createLinkSnippet(pasteAsMarkdownLink, mdPath, title, uri, placeholderValue, isExternalLink);
 		}
 
 		if (i < uris.length - 1 && uris.length > 1) {
@@ -292,7 +374,6 @@ function escapeMarkdownLinkPath(mdPath: string): string {
 
 function escapeBrackets(value: string): string {
 	value = value.replace(/[\[\]]/g, '\\$&');
-	// value = value.replace(/\r\n\r\n/g, '\n\n');
 	return value;
 }
 

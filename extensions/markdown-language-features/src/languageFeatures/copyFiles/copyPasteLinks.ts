@@ -4,44 +4,53 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { getMarkdownLink } from './shared';
-
+import { externalUriSchemes, createEditAddingLinksForUriList } from './shared';
 class PasteLinkEditProvider implements vscode.DocumentPasteEditProvider {
 
-	private readonly _id = 'insertMarkdownLink';
+	readonly id = 'insertMarkdownLink';
 	async provideDocumentPasteEdits(
 		document: vscode.TextDocument,
 		ranges: readonly vscode.Range[],
 		dataTransfer: vscode.DataTransfer,
 		token: vscode.CancellationToken,
 	): Promise<vscode.DocumentPasteEdit | undefined> {
-		const enabled = vscode.workspace.getConfiguration('markdown', document).get('editor.pasteUrlAsFormattedLink.enabled', true);
-		if (!enabled) {
+		const enabled = vscode.workspace.getConfiguration('markdown', document).get<'always' | 'smart' | 'never'>('editor.pasteUrlAsFormattedLink.enabled', 'smart');
+		if (enabled === 'never') {
 			return;
 		}
 
-		// Check if dataTransfer contains a URL
 		const item = dataTransfer.get('text/plain');
-		try {
-			new URL(await item?.value);
-		} catch (error) {
+		const urlList = await item?.asString();
+
+		if (urlList === undefined) {
 			return;
 		}
 
-		const label = vscode.l10n.t('Insert Markdown Link');
-		const uriEdit = new vscode.DocumentPasteEdit('', this._id, label);
-		const urlList = await item?.asString();
+		if (!validateLink(urlList)) {
+			return;
+		}
+
+		const uriEdit = new vscode.DocumentPasteEdit('', this.id, '');
 		if (!urlList) {
 			return undefined;
 		}
-		const pasteEdit = await getMarkdownLink(document, ranges, urlList, token);
+		const pasteEdit = await createEditAddingLinksForUriList(document, ranges, urlList, token, true);
 		if (!pasteEdit) {
 			return;
 		}
 
+		uriEdit.label = pasteEdit.label;
 		uriEdit.additionalEdit = pasteEdit.additionalEdits;
 		return uriEdit;
 	}
+}
+
+export function validateLink(urlList: string): boolean {
+	const url = urlList?.split(/\s+/);
+	if (url.length > 1 || !externalUriSchemes.includes(vscode.Uri.parse(url[0]).scheme)) {
+		return false;
+	}
+	return true;
 }
 
 export function registerLinkPasteSupport(selector: vscode.DocumentSelector,) {

@@ -6,11 +6,12 @@
 import { status } from 'vs/base/browser/ui/aria/aria';
 import { RunOnceScheduler } from 'vs/base/common/async';
 import { Disposable, IDisposable } from 'vs/base/common/lifecycle';
-import { AudioCue, AudioCueGroupId, IAudioCueService } from 'vs/platform/audioCues/browser/audioCueService';
+import { AudioCue, IAudioCueService } from 'vs/platform/audioCues/browser/audioCueService';
 import { IChatAccessibilityService } from 'vs/workbench/contrib/chat/browser/chat';
 import { IChatResponseViewModel } from 'vs/workbench/contrib/chat/common/chatViewModel';
 
 const CHAT_RESPONSE_PENDING_AUDIO_CUE_LOOP_MS = 5000;
+const CHAT_RESPONSE_PENDING_ALLOWANCE_MS = 4000;
 export class ChatAccessibilityService extends Disposable implements IChatAccessibilityService {
 
 	declare readonly _serviceBrand: undefined;
@@ -18,6 +19,7 @@ export class ChatAccessibilityService extends Disposable implements IChatAccessi
 	private _responsePendingAudioCue: IDisposable | undefined;
 	private _hasReceivedRequest: boolean = false;
 	private _runOnceScheduler: RunOnceScheduler;
+	private _lastResponse: string | undefined;
 
 	constructor(@IAudioCueService private readonly _audioCueService: IAudioCueService) {
 		super();
@@ -25,7 +27,7 @@ export class ChatAccessibilityService extends Disposable implements IChatAccessi
 			if (!this._hasReceivedRequest) {
 				this._responsePendingAudioCue = this._audioCueService.playAudioCueLoop(AudioCue.chatResponsePending, CHAT_RESPONSE_PENDING_AUDIO_CUE_LOOP_MS);
 			}
-		}, CHAT_RESPONSE_PENDING_AUDIO_CUE_LOOP_MS));
+		}, CHAT_RESPONSE_PENDING_ALLOWANCE_MS));
 	}
 	acceptRequest(): void {
 		this._audioCueService.playAudioCue(AudioCue.chatRequestSent, true);
@@ -36,7 +38,11 @@ export class ChatAccessibilityService extends Disposable implements IChatAccessi
 		const isPanelChat = typeof response !== 'string';
 		this._responsePendingAudioCue?.dispose();
 		this._runOnceScheduler?.cancel();
-		this._audioCueService.playRandomAudioCue(AudioCueGroupId.chatResponseReceived, true);
+		if (this._lastResponse === response?.toString()) {
+			return;
+		}
+		this._lastResponse = response?.toString();
+		this._audioCueService.playAudioCue(AudioCue.chatResponseReceived, true);
 		this._hasReceivedRequest = false;
 		if (!response) {
 			return;
