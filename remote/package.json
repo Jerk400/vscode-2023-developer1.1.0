@@ -20,7 +20,7 @@
     "jschardet": "3.0.0",
     "kerberos": "^2.0.1",
     "keytar": "7.9.0",
-    "minimist": "^1.2.6",
+    "minimist": "^1.2.8",
     "native-watchdog": "^1.4.1",
     "node-pty": "1.1.0-beta1",
     "tas-client-umd": "0.1.8",
